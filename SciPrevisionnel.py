@@ -1,10 +1,10 @@
-
+import time
 import streamlit as st
 import numpy_financial as npf
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import time
+
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Prévisionnel SCI à l'IS", layout="wide")
