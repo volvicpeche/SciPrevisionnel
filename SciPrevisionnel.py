@@ -15,7 +15,7 @@ st.title("🏠 Simulation Financière SCI à l'IS")
 @st.cache_data  # Ajout de mise en cache pour améliorer les performances
 def calculer_tableau_amortissement(montant, taux_annuel, duree_annees):
     """Calcule un tableau d'amortissement complet pour le prêt"""
-    mensualite = npf.pmt(taux_annuel/12, duree_annees*12, -montant)
+    mensualite_credit = npf.pmt(taux_annuel/12, duree_annees*12, -montant)
 
     # Utilisation de la compréhension de liste pour plus d'efficacité
     tableau = []
@@ -23,12 +23,12 @@ def calculer_tableau_amortissement(montant, taux_annuel, duree_annees):
 
     for mois in range(1, duree_annees*12 + 1):
         interet_mois = reste_a_payer * (taux_annuel/12)
-        capital_mois = mensualite - interet_mois
+        capital_mois = mensualite_credit - interet_mois
         reste_a_payer -= capital_mois
 
         tableau.append({
             'Mois': mois,
-            'Mensualité': mensualite,
+            'Mensualité': mensualite_credit,
             'Intérêts': interet_mois,
             'Capital': capital_mois,
             'Capital Restant': max(0, reste_a_payer)
@@ -37,30 +37,30 @@ def calculer_tableau_amortissement(montant, taux_annuel, duree_annees):
     return pd.DataFrame(tableau)
 
 @st.cache_data  # Ajout de mise en cache pour améliorer les performances
-def calculs_financiers(params):
+def calculs_financiers(params_f):
     """Effectue les calculs financiers année par année"""
     # Calcul du tableau d'amortissement
-    tableau_amort = calculer_tableau_amortissement(params['emprunt'], params['taux_credit'], params['duree_credit'])
+    tableau_amort = calculer_tableau_amortissement(params_f['emprunt'], params_f['taux_credit'], params_f['duree_credit'])
 
     # Préparation des calculs année par année
     resultats = []
     premiere_annee_is = None
 
     # Calcul de la valeur du bâti (hors terrain) pour l'amortissement
-    valeur_bati = params['prix_achat'] * (1 - params.get('pourcentage_terrain', 0.2)) + params['travaux']
+    valeur_bati = params_f['prix_achat'] * (1 - params_f.get('pourcentage_terrain', 0.2)) + params_f['travaux']
 
-    for an in range(1, params['duree_projection'] + 1):
+    for an in range(1, params_f['duree_projection'] + 1):
         # Loyers avec revalorisation
-        loyer_annuel = params['loyers_mensuels'] * 12 * ((1 + params['revalorisation_loyers']) ** (an - 1))
+        loyer_annuel = params_f['loyers_mensuels'] * 12 * ((1 + params_f['revalorisation_loyers']) ** (an - 1))
 
         # Charges avec indexation
         charges_annuelles = sum([
-            params['taxe_fonciere'],
-            params['assurance'],
-            params['frais_gestion'],
-            params['entretien'],
-            params['frais_comptable']
-        ]) * ((1 + params['indexation_charges']) ** (an - 1))
+            params_f['taxe_fonciere'],
+            params_f['assurance'],
+            params_f['frais_gestion'],
+            params_f['entretien'],
+            params_f['frais_comptable']
+        ]) * ((1 + params_f['indexation_charges']) ** (an - 1))
 
         # Calcul des intérêts et du capital remboursé cette année
         debut_mois = (an-1) * 12 + 1
@@ -72,7 +72,7 @@ def calculs_financiers(params):
         credit_annuel = amort_annuel['Mensualité'].sum() if not amort_annuel.empty else 0
 
         # Calcul amortissement comptable (uniquement sur le bâti, pas le terrain)
-        duree_amortissement = params.get('duree_amortissement', 20)
+        #duree_amortissement = params.get('duree_amortissement', 20)
         if an <= duree_amortissement:  # Amortissement sur la durée définie
             amortissement_annuel = valeur_bati / duree_amortissement
         else:
@@ -116,15 +116,15 @@ def calculs_financiers(params):
             capital_rembourse_cumule = previous['Capital remboursé cumulé'] + capital_rembourse_annuel
 
         # Valeur nette
-        valeur_patrimoine = params['prix_achat'] * ((1 + params['appreciation_immobilier']) ** (an - 1))
-        valeur_nette = valeur_patrimoine - (params['emprunt'] - capital_rembourse_cumule)
+        valeur_patrimoine = params_f['prix_achat'] * ((1 + params_f['appreciation_immobilier']) ** (an - 1))
+        valeur_nette = valeur_patrimoine - (params_f['emprunt'] - capital_rembourse_cumule)
 
         # Rendement sur fonds propres
-        rendement_fonds_propres = (cashflow_annuel / params['apport']) * 100 if params['apport'] > 0 else 0
-        rendement_brut = (loyer_annuel / params['prix_achat']) * 100
+        rendement_fonds_propres = (cashflow_annuel / params_f['apport']) * 100 if params_f['apport'] > 0 else 0
+        rendement_brut = (loyer_annuel / params_f['prix_achat']) * 100
 
         # Capital restant à rembourser
-        capital_restant = params['emprunt'] - capital_rembourse_cumule
+        capital_restant = params_f['emprunt'] - capital_rembourse_cumule
 
         resultats.append({
             # Informations générales
@@ -166,14 +166,14 @@ def formatter_euros(valeur):
     """Formate un nombre en euros"""
     return f"{valeur:,.0f} €".replace(",", " ")
 
-def export_excel_with_inputs(results_df, input_params):
+def export_excel_with_inputs(results_df, input_params_excel):
     """
-    Export results_df to Excel with an additional sheet containing input_params.
+    Export results_df to Excel with an additional sheet containing input_params_excel.
     """
     # Flatten input parameters dictionary into a DataFrame
     flat_params = []
-    for section, params in input_params.items():
-        for key, value in params.items():
+    for section, parametres in input_params_excel.items():
+        for key, value in parametres.items():
             flat_params.append({"Section": section, "Paramètre": key, "Valeur": value})
     params_df = pd.DataFrame(flat_params)
 
@@ -213,8 +213,8 @@ with st.sidebar:
         st.info(f"Montant de l'emprunt : {formatter_euros(emprunt)}")
         taux_credit = st.number_input("Taux crédit (%)", value=2.5, step=0.1) / 100
         duree_credit = st.number_input("Durée crédit (ans)", value=20, step=1)
-        mensualite = npf.pmt(taux_credit/12, duree_credit*12, -emprunt)
-        st.info(f"Mensualité : {formatter_euros(mensualite)}")
+        mensualite_base = npf.pmt(taux_credit/12, duree_credit*12, -emprunt)
+        st.info(f"Mensualité : {formatter_euros(mensualite_base)}")
         taux_assurance = st.number_input("Taux assurance prêt (%)", value=0.36, step=0.01) / 100
         assurance_pret = emprunt * taux_assurance / 12
         st.info(f"Assurance prêt mensuelle : {formatter_euros(assurance_pret)}")
@@ -247,7 +247,7 @@ if lancer:
             'emprunt': emprunt,
             'taux_credit': taux_credit,
             'duree_credit': duree_credit,
-            'mensualite': mensualite + assurance_pret,  # Ajout de l'assurance prêt
+            'mensualite': mensualite_base + assurance_pret,  # Ajout de l'assurance prêt
             'taxe_fonciere': taxe_fonciere,
             'assurance': assurance,
             'frais_gestion': frais_gestion,
@@ -257,7 +257,7 @@ if lancer:
             'duree_amortissement': duree_amortissement
         }
 
-        df, premiere_annee_is = calculs_financiers(params)
+        df, first_is = calculs_financiers(params)
 
         # Prepare input_params dictionary
         input_params = {
@@ -281,7 +281,7 @@ if lancer:
                 "Emprunt": emprunt,
                 "Taux crédit": taux_credit,
                 "Durée crédit": duree_credit,
-                "Mensualité": mensualite,
+                "Mensualité": mensualite_base,
                 "Assurance prêt": assurance_pret
             },
             "Charges annuelles": {
@@ -325,8 +325,8 @@ if lancer:
         col3.metric("⏱️ Durée du crédit", f"{duree_credit} ans")
 
         # Alerte sur l'IS
-        if premiere_annee_is:
-            st.warning(f"⚠️ IS à payer à partir de l'année {premiere_annee_is}")
+        if first_is:
+            st.warning(f"⚠️ IS à payer à partir de l'année {first_is}")
         else:
             st.success("✅ Pas d'IS à payer sur toute la durée de projection")
 
