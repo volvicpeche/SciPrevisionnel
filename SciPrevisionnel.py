@@ -1,4 +1,5 @@
 import time
+import io
 import streamlit as st
 import numpy_financial as npf
 import pandas as pd
@@ -165,28 +166,25 @@ def formatter_euros(valeur):
     """Formate un nombre en euros"""
     return f"{valeur:,.0f} €".replace(",", " ")
 
-def export_csv(df):
-    """Exporte le dataframe en CSV avec encodage UTF-8 et séparateur point-virgule"""
-    # Création d'une copie pour éviter de modifier le dataframe original
-    df_export = df.copy()
+def export_excel_with_inputs(results_df, input_params):
+    """
+    Export results_df to Excel with an additional sheet containing input_params.
+    """
+    # Flatten input parameters dictionary into a DataFrame
+    flat_params = []
+    for section, params in input_params.items():
+        for key, value in params.items():
+            flat_params.append({"Section": section, "Paramètre": key, "Valeur": value})
+    params_df = pd.DataFrame(flat_params)
 
-    # Renommage des colonnes pour retirer les caractères problématiques
-    # et assurer la compatibilité avec les logiciels type Excel français
-    colonnes_renommees = {}
-    for col in df_export.columns:
-        # Remplacer les caractères problématiques pour l'export
-        colonnes_renommees[col] = col
+    # Prepare BytesIO stream
+    output = io.BytesIO()
 
-    df_export = df_export.rename(columns=colonnes_renommees)
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        results_df.to_excel(writer, sheet_name="Prévisionnel", index=False)
+        params_df.to_excel(writer, sheet_name="Paramètres", index=False)
 
-    # Conversion des nombres à virgule pour Excel français (remplacement du point par la virgule)
-    for col in df_export.select_dtypes(include=['float']).columns:
-        df_export[col] = df_export[col].apply(lambda x: str(x).replace('.', ','))
-
-    # Export avec séparateur point-virgule et encodage UTF-8 avec BOM pour Excel
-    csv_str = df_export.to_csv(index=False, sep=';', encoding='utf-8-sig')
-
-    return csv_str
+    return output.getvalue()
 
 # --- SIDEBAR AVEC TABS ---
 with st.sidebar:
@@ -260,6 +258,41 @@ if lancer:
         }
 
         df, premiere_annee_is = calculs_financiers(params)
+
+        # Prepare input_params dictionary
+        input_params = {
+            "Paramètres généraux": {
+                "Durée projection": duree_projection,
+                "Appréciation immo": appreciation_immobilier,
+                "Indexation charges": indexation_charges,
+                "Durée amortissement": duree_amortissement
+            },
+            "Bien immobilier": {
+                "Prix achat": prix_achat,
+                "Frais notaire": frais_notaire,
+                "Travaux": travaux,
+                "Pourcentage terrain": pourcentage_terrain,
+                "Loyers mensuels": loyers_mensuels,
+                "Revalo loyers": revalorisation_loyers,
+                "Vacance locative": vacance_locative
+            },
+            "Financement": {
+                "Apport": apport,
+                "Emprunt": emprunt,
+                "Taux crédit": taux_credit,
+                "Durée crédit": duree_credit,
+                "Mensualité": mensualite,
+                "Assurance prêt": assurance_pret
+            },
+            "Charges annuelles": {
+                "Taxe foncière": taxe_fonciere,
+                "Assurance PNO": assurance,
+                "Frais gestion": frais_gestion,
+                "Entretien/Divers": entretien,
+                "Frais comptable": frais_comptable,
+                "Provision travaux": provision_travaux
+            }
+        }
 
         # --- TABLEAU DE BORD ---
         st.header("📊 Tableau de bord")
@@ -506,13 +539,13 @@ if lancer:
             }).format({"Rendement / fonds propres (%)": "{:.2f}", "Rendement brut (%)": "{:.2f}"}), use_container_width=True)
 
         # --- Exporter les données ---
-        # Utilisation de la fonction export_csv pour un CSV compatible Excel français
-        csv_data = export_csv(df)
+        # Generate Excel with both sheets
+        excel_data = export_excel_with_inputs(df, input_params)
         st.download_button(
-            label="📥 Télécharger les données",
-            data=csv_data,
-            file_name=f"simulation_sci_is_{time.strftime('%Y%m%d_%H%M')}.csv",
-            mime="text/csv;charset=utf-8-sig"
+            label="📥 Télécharger les données Excel",
+            data=excel_data,
+            file_name=f"simulation_sci_is_{time.strftime('%Y%m%d_%H%M')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
 else:
