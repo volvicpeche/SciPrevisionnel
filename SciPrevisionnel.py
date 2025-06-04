@@ -48,6 +48,7 @@ def calculs_financiers(params_f):
 
     # Calcul de la valeur du bâti (hors terrain) pour l'amortissement
     valeur_bati = params_f['prix_achat'] * (1 - params_f.get('pourcentage_terrain', 0.2)) + params_f['travaux']
+    duree_amortissement = params_f.get('duree_amortissement', 20)
 
     for an in range(1, params_f['duree_projection'] + 1):
         # Loyers avec revalorisation
@@ -72,7 +73,6 @@ def calculs_financiers(params_f):
         credit_annuel = amort_annuel['Mensualité'].sum() if not amort_annuel.empty else 0
 
         # Calcul amortissement comptable (uniquement sur le bâti, pas le terrain)
-        #duree_amortissement = params.get('duree_amortissement', 20)
         if an <= duree_amortissement:  # Amortissement sur la durée définie
             amortissement_annuel = valeur_bati / duree_amortissement
         else:
